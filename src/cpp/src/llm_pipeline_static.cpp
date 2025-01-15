@@ -1145,12 +1145,12 @@ void StatelessLLMPipeline::setupAndCompileModels(
     set_npuw_cache_dir(generate_config);
 
     auto kv_compiled_model = core.compile_model(
-        kvcache_model, device, generate_config
+        kvcache_model, "CPU"
     );
     ov::genai::utils::print_compiled_model_properties(kv_compiled_model, "Static LLM kv compiled model");
     m_kvcache_request = kv_compiled_model.create_infer_request();
 
-    auto prefill_compiled_model = core.compile_model(prefill_model, device, prefill_config);
+    auto prefill_compiled_model = core.compile_model(prefill_model, "CPU");
     m_prefill_request = prefill_compiled_model.create_infer_request();
     ov::genai::utils::print_compiled_model_properties(prefill_compiled_model, "Static LLM prefill compiled model");
 }

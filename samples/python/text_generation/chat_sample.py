@@ -18,8 +18,12 @@ def main():
     parser.add_argument('model_dir')
     args = parser.parse_args()
 
-    device = 'CPU'  # GPU can be used as well
-    pipe = openvino_genai.LLMPipeline(args.model_dir, device)
+    device = 'NPU'  # GPU can be used as well
+    pipe = openvino_genai.LLMPipeline(args.model_dir, device,
+    { "NPU_BYPASS_UMD_CACHING" : "YES", "STATIC_PIPELINE" : "STATEFUL", "GENERATE_HINT" : "BEST_PERF",
+      "NPUW_DEVICES" : "NPU", "NPUW_DUMP_FULL" : "YES", "NPUW_DUMP_SUBS" : "YES", "NPUW_DUMP_IO" : "YES"})
+
+    
 
     config = openvino_genai.GenerationConfig()
     config.max_new_tokens = 100
