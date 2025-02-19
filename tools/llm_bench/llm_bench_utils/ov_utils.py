@@ -462,7 +462,7 @@ def create_genai_image_gen_model(model_path, device, ov_config, **kwargs):
                 unet.reshape(unet_batch_size, kwargs.get("height"), kwargs.get("width"), max_position_embeddings)
                 vae.reshape(1, kwargs.get("height"), kwargs.get("width"))
             text_encoder.compile("CPU", **ov_config)
-            unet.compile(device.upper(), **ov_config)
+            unet.compile(device.upper(), **ov_config, NPU_TURBO="YES", NPU_DPU_GROUPS="6", NPU_MAX_TILES="6")
             vae.compile("GPU", **ov_config)
             t2i_pipe = openvino_genai.Text2ImagePipeline.stable_diffusion(scheduler, text_encoder, unet, vae)
         elif model_class_name == "LatentConsistencyModelPipeline":
@@ -475,7 +475,7 @@ def create_genai_image_gen_model(model_path, device, ov_config, **kwargs):
                 unet.reshape(unet_batch_size, kwargs.get("height"), kwargs.get("width"), max_position_embeddings)
                 vae.reshape(1, kwargs.get("height"), kwargs.get("width"))
             text_encoder.compile("CPU", **ov_config)
-            unet.compile(device.upper(), **ov_config)
+            unet.compile(device.upper(), **ov_config, NPU_TURBO="YES", NPU_DPU_GROUPS="6", NPU_MAX_TILES="6")
             vae.compile("GPU", **ov_config)
             t2i_pipe = openvino_genai.Text2ImagePipeline.latent_consistency_model(scheduler, text_encoder, unet, vae)
         elif model_class_name == "StableDiffusionXLPipeline":
