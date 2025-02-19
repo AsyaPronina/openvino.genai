@@ -346,7 +346,7 @@ def get_genai_clip_text_encoder(model_index_data, model_path, device, ov_config)
     import openvino_genai
     text_encoder_type = model_index_data.get("text_encoder", [])
     if ("CLIPTextModel" in text_encoder_type):
-        text_encoder = openvino_genai.CLIPTextModel(model_path / "text_encoder", device.upper(), **ov_config)
+        text_encoder = openvino_genai.CLIPTextModel(model_path / "text_encoder")
     else:
         raise RuntimeError(f'==Failure ==: model by path:{model_path} has unsupported text encoder type {text_encoder_type}')
 
@@ -368,7 +368,7 @@ def get_genai_unet_model(model_index_data, model_path, device, ov_config):
     import openvino_genai
     unet_type = model_index_data.get("unet", [])
     if ("UNet2DConditionModel" in unet_type):
-        unet = openvino_genai.UNet2DConditionModel(model_path / "unet", device.upper(), **ov_config)
+        unet = openvino_genai.UNet2DConditionModel(model_path / "unet")
     else:
         raise RuntimeError(f'==Failure ==: model by path:{model_path} has unsupported UNet type {unet_type}')
 
@@ -440,29 +440,51 @@ def create_genai_image_gen_model(model_path, device, ov_config, **kwargs):
     start = time.perf_counter()
 
     scheduler_type = data.get("scheduler", ["", ""])[1]
-    if (scheduler_type not in ["LCMScheduler", "DDIMScheduler", "PNDMScheduler", "LMSDiscreteScheduler", "EulerDiscreteScheduler",
-                               "FlowMatchEulerDiscreteScheduler", "EulerAncestralDiscreteScheduler"]):
-        scheduler = openvino_genai.Scheduler.from_config(model_path / "scheduler/scheduler_config.json", openvino_genai.Scheduler.Type.DDIM)
-        log.warning(f'Type of scheduler {scheduler_type} is unsupported. Please, be aware that it will be replaced to DDIMScheduler')
+    # if (scheduler_type not in ["LCMScheduler", "DDIMScheduler", "PNDMScheduler", "LMSDiscreteScheduler", "EulerDiscreteScheduler",
+    #                            "FlowMatchEulerDiscreteScheduler", "EulerAncestralDiscreteScheduler"]):
+    if (True):
+        scheduler = openvino_genai.Scheduler.from_config(model_path / "scheduler/scheduler_config.json")
+        # log.warning(f'Type of scheduler {scheduler_type} is unsupported. Please, be aware that it will be replaced to DDIMScheduler')
 
         vae_type = data.get("vae", [])
         if ("AutoencoderKL" in vae_type):
-            vae = openvino_genai.AutoencoderKL(model_path / "vae_decoder", device.upper(), **ov_config)
+            vae = openvino_genai.AutoencoderKL(model_path / "vae_decoder")
         else:
             raise RuntimeError(f'==Failure ==: model by path:{model_path} has unsupported vae decoder type {vae_type}')
 
         if model_class_name == "StableDiffusionPipeline":
             text_encoder = get_genai_clip_text_encoder(data, model_path, device, ov_config)
             unet = get_genai_unet_model(data, model_path, device, ov_config)
+            unet_batch_size = 2 if unet.do_classifier_free_guidance(7.5) else 1
+            if device == "NPU":
+                text_encoder.reshape(unet_batch_size)
+                max_position_embeddings = text_encoder.get_config().max_position_embeddings
+                unet.reshape(unet_batch_size, kwargs.get("height"), kwargs.get("width"), max_position_embeddings)
+                vae.reshape(1, kwargs.get("height"), kwargs.get("width"))
+            text_encoder.compile("CPU", **ov_config)
+            unet.compile(device.upper(), **ov_config)
+            vae.compile("GPU", **ov_config)
             t2i_pipe = openvino_genai.Text2ImagePipeline.stable_diffusion(scheduler, text_encoder, unet, vae)
         elif model_class_name == "LatentConsistencyModelPipeline":
             text_encoder = get_genai_clip_text_encoder(data, model_path, device, ov_config)
             unet = get_genai_unet_model(data, model_path, device, ov_config)
+            unet_batch_size = 2 if unet.do_classifier_free_guidance(7.5) else 1
+            if device == "NPU":
+                text_encoder.reshape(unet_batch_size)
+                max_position_embeddings = text_encoder.get_config().max_position_embeddings
+                unet.reshape(unet_batch_size, kwargs.get("height"), kwargs.get("width"), max_position_embeddings)
+                vae.reshape(1, kwargs.get("height"), kwargs.get("width"))
+            text_encoder.compile("CPU", **ov_config)
+            unet.compile(device.upper(), **ov_config)
+            vae.compile("GPU", **ov_config)
             t2i_pipe = openvino_genai.Text2ImagePipeline.latent_consistency_model(scheduler, text_encoder, unet, vae)
         elif model_class_name == "StableDiffusionXLPipeline":
             clip_text_encoder = get_genai_clip_text_encoder(data, model_path, device, ov_config)
             clip_text_encoder_2 = get_genai_clip_text_encoder_with_projection(data, model_path, "text_encoder_2", device, ov_config)
             unet = get_genai_unet_model(data, model_path, device, ov_config)
+            clip_text_encoder.compile(device.upper(), **ov_config)
+            unet.compile(device.upper(), **ov_config)
+            vae.compile(device.upper(), **ov_config)
             t2i_pipe = openvino_genai.Text2ImagePipeline.stable_diffusion_xl(scheduler, clip_text_encoder, clip_text_encoder_2, unet, vae)
         else:
             raise RuntimeError(f'==Failure ==: model by path:{model_path} has unsupported _class_name {model_class_name}')
