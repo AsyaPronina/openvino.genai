@@ -111,16 +111,20 @@ ov::genai::LLMPipeline::LLMPipeline(
     const std::string& device,
     const ov::AnyMap& user_properties) :
     m_device(device) {
+    std::cout << "ov::genai::LLMPipeline::LLMPipeline()" << std::endl;
+    std::cout << "Device: " << m_device << std::endl;
     auto start_time = std::chrono::steady_clock::now();
 
     auto [properties, attention_backend] = utils::extract_attention_backend(user_properties);
 
     // If CB is invoked explicitly, create CB adapter as is and re-throw in case if internal issues
-    if (utils::explicitly_requires_paged_attention(user_properties)) {
+    // FIXME: Why 'explicitly_requires_paged_attention' was true?
+    if (device == "NPU") {
+        std::cout << "Under condition 'NPU':" << std::endl;
+        m_pimpl = std::make_unique<StatefulLLMPipelineNPU>(models_path, properties);
+    }else if (utils::explicitly_requires_paged_attention(user_properties)) {
         auto [device_properties, scheduler_config] = utils::extract_scheduler_config(properties, utils::get_latency_oriented_scheduler_config());
         m_pimpl = std::make_unique<ContinuousBatchingAdapter>(models_path, scheduler_config, device, device_properties);
-    } else if (device == "NPU") {
-        m_pimpl = std::make_unique<StatefulLLMPipelineNPU>(models_path, properties);
     } else if (attention_backend == PA_BACKEND) {
         // try to call CB adapter one more time, but with safe guard to silent exception
         try {

@@ -52,10 +52,13 @@ StatefulLLMPipelineNPU::StatefulLLMPipelineNPU(
     const ov::AnyMap& properties,
     const ov::genai::GenerationConfig& generation_config)
     : LLMPipelineImplBase(tokenizer, generation_config) {
+    std::cout << "StatefulLLMPipelineNPU::StatefulLLMPipelineNPU" << std::endl;
     auto properties_without_draft_model = properties;
     auto draft_model_descr = extract_draft_model_from_config(properties_without_draft_model);
      if (draft_model_descr.model != nullptr) {
-        auto main_model_descr = ov::genai::ModelDesc(model, tokenizer, "NPU", properties_without_draft_model, {}, generation_config);
+        // Pinned to CPU for debug:
+        draft_model_descr.device = "CPU";
+        auto main_model_descr = ov::genai::ModelDesc(model, tokenizer, "CPU", properties_without_draft_model, {}, generation_config);
         m_pimpl = std::make_unique<SpeculativeLLMPipelineNPU>(main_model_descr, draft_model_descr);
     } else if (properties_without_draft_model.count("STATIC_PIPELINE")) {
         m_pimpl = static_llm::LLMPipelineFactory::create(model, tokenizer,
