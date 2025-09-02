@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #include "pipeline_stateful_npu.hpp"
-#include "speculative_decoding/speculative_decoding_npu.hpp"
+#include "speculative_decoding/speculative_decoding_stateful.hpp"
 #include "llm/pipeline_stateful.hpp"
 #include "llm/pipeline_static.hpp"
 #include "utils.hpp"
@@ -60,7 +60,7 @@ StatefulLLMPipelineNPU::StatefulLLMPipelineNPU(
     auto draft_model_descr = extract_draft_model_from_config(properties_without_draft_model);
     if (draft_model_descr.model != nullptr) {
         auto main_model_descr = ov::genai::ModelDesc(model, tokenizer, device, properties_without_draft_model, {}, generation_config);
-        m_pimpl = std::make_unique<SpeculativeLLMPipelineNPU>(main_model_descr, draft_model_descr);
+        m_pimpl = std::make_unique<StatefulSpeculativeLLMPipeline>(main_model_descr, draft_model_descr);
     } else if (properties_without_draft_model.count("STATIC_PIPELINE")) {
         m_pimpl = static_llm::LLMPipelineFactory::create(model, tokenizer,
             properties_without_draft_model, generation_config);
