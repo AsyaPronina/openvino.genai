@@ -946,19 +946,34 @@ def load_text2video_genai_pipeline(model_dir, device="CPU", ov_config=None, **kw
     )
 
 
+def _is_ltx2_model(model_id):
+    """Check whether `model_id` is an LTX-2.x checkpoint.
+
+    `model_id` can be an HF Hub id or a local directory (including an OpenVINO export); the check
+    looks at the `_class_name` declared in its model_index.json. LTX-2 uses a joint audio-video
+    transformer with a different interface than LTX-Video 0.9.x, so it must be driven by the
+    `LTX2*` pipelines rather than the `LTX*` ones.
+    """
+    from diffusers import DiffusionPipeline
+
+    class_name = DiffusionPipeline.load_config(model_id).get("_class_name", "")
+    return class_name.startswith("LTX2")
+
+
 def load_text2video_model(model_id, device="CPU", ov_config=None, use_hf=False, use_genai=False, **kwargs):
     if use_genai:
         logger.info("Using OpenVINO GenAI API")
         model = load_text2video_genai_pipeline(model_id, device, ov_config, **kwargs)
     elif use_hf:
-        from diffusers import LTXPipeline
+        from diffusers import LTXPipeline, LTX2Pipeline
 
-        logger.info("Using HF Transformers API")
+        pipeline_cls = LTX2Pipeline if _is_ltx2_model(model_id) else LTXPipeline
+        logger.info(f"Using HF Transformers API ({pipeline_cls.__name__})")
         torch_dtype = _resolve_torch_dtype(kwargs.get("torch_dtype")) or torch.float32
         try:
-            model = LTXPipeline.from_pretrained(model_id, torch_dtype=torch_dtype)
+            model = pipeline_cls.from_pretrained(model_id, torch_dtype=torch_dtype)
         except ValueError:
-            model = LTXPipeline.from_pretrained(model_id, trust_remote_code=True, torch_dtype=torch_dtype)
+            model = pipeline_cls.from_pretrained(model_id, trust_remote_code=True, torch_dtype=torch_dtype)
         if kwargs.get("adapters") is not None:
             adapters = kwargs["adapters"]
             alphas = kwargs.get("alphas", None)
@@ -968,19 +983,21 @@ def load_text2video_model(model_id, device="CPU", ov_config=None, use_hf=False, 
                 model.load_lora_weights(adapter, adapter_name=f"adapter_{idx}")
             model.set_adapters([f"adapter_{idx}" for idx in range(len(adapters))], adapter_weights=alphas)
     else:
-        logger.info("Using Optimum API")
-        from optimum.intel import OVLTXPipeline
+        from optimum.intel import OVLTXPipeline, OVLTX2Pipeline
+
+        pipeline_cls = OVLTX2Pipeline if _is_ltx2_model(model_id) else OVLTXPipeline
+        logger.info(f"Using Optimum API ({pipeline_cls.__name__})")
 
         if "adapters" in kwargs and kwargs["adapters"] is not None:
-            raise ValueError("Adapters are not supported for OVLTXPipeline.")
+            raise ValueError(f"Adapters are not supported for {pipeline_cls.__name__}.")
 
         model_kwargs = {"ov_config": ov_config, "safety_checker": None}
         if kwargs.get("from_onnx"):
             model_kwargs["from_onnx"] = kwargs["from_onnx"]
         try:
-            model = OVLTXPipeline.from_pretrained(model_id, device=device, **model_kwargs)
+            model = pipeline_cls.from_pretrained(model_id, device=device, **model_kwargs)
         except ValueError:
-            model = OVLTXPipeline.from_pretrained(
+            model = pipeline_cls.from_pretrained(
                 model_id, trust_remote_code=True, use_cache=True, device=device, **model_kwargs
             )
 
